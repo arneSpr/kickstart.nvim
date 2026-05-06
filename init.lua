@@ -923,10 +923,7 @@ require('lazy').setup({
     branch = 'main',
     build = ':TSUpdate',
     lazy = false,
-    config = function()
-      local ts = require 'nvim-treesitter'
-      ts.install({ 'python', 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' }):wait(300000)
-
+    init = function()
       vim.api.nvim_create_autocmd('FileType', {
         callback = function()
           pcall(vim.treesitter.start)
