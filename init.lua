@@ -686,6 +686,11 @@ require('lazy').setup({
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
+      -- :MasonUpdateAll — actually upgrade installed Mason packages (unlike
+      -- :MasonUpdate, which only refreshes the registry). Used by the
+      -- `update-all` zsh function via `nvim --headless "+MasonUpdateAll" +qa`.
+      require('custom.mason-update-all').setup()
+
       require('mason-lspconfig').setup {
         handlers = {
           function(server_name)
@@ -924,18 +929,33 @@ require('lazy').setup({
     build = ':TSUpdate',
     lazy = false,
     init = function()
+      -- Treesitter highlighting/indent/folding are provided by Neovim itself
+      -- (see :h treesitter-highlight). Start the parser on each FileType; when a
+      -- parser exists, also enable treesitter-based indentexpr and folding.
       vim.api.nvim_create_autocmd('FileType', {
-        callback = function()
-          pcall(vim.treesitter.start)
+        callback = function(event)
+          if pcall(vim.treesitter.start, event.buf) then
+            vim.bo[event.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+            -- Folding is window-local: only set it for the window actually showing
+            -- this buffer (skips headless / not-yet-displayed buffers).
+            if vim.api.nvim_win_is_valid(0) and vim.api.nvim_win_get_buf(0) == event.buf then
+              vim.wo[0].foldmethod = 'expr'
+              vim.wo[0].foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+            end
+          end
         end,
       })
     end,
-    opts = {
-      ensure_installed = { 'python', 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
-      auto_install = true,
-      highlight = { enable = true, additional_vim_regex_highlighting = { 'ruby' } },
-      indent = { enable = true, disable = { 'ruby' } },
-    },
+    config = function()
+      -- nvim-treesitter's `main` branch ships queries under runtime/; `install`
+      -- copies parsers + queries into stdpath('data')/site, which is on
+      -- 'runtimepath' by default, so Neovim resolves them. No-op if present.
+      require('nvim-treesitter').setup {}
+      require('nvim-treesitter').install {
+        'python', 'bash', 'c', 'diff', 'html', 'lua', 'luadoc',
+        'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc',
+      }
+    end,
   },
 
   -- The following comments only work if you have downloaded the kickstart repo, not just copy pasted the
