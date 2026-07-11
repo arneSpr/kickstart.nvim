@@ -156,6 +156,16 @@ vim.opt.cursorline = true
 -- Minimal number of screen lines to keep above and below the cursor.
 vim.opt.scrolloff = 10
 
+-- [[ Spellcheck (scientific/prose writing) ]]
+--  Off globally; enabled per-filetype in the `spell` augroup below.
+--  EN + DE both active (DE spell file is downloaded on first use).
+--  See `:help spell` and `:help 'spelllang'`
+vim.opt.spell = false
+vim.opt.spelllang = { 'en', 'de' }
+vim.opt.spelloptions = 'camel' -- handle CamelCase identifiers in prose
+-- Allow <C-x><C-k> to complete words from the spell dictionary.
+vim.opt.complete:append 'kspell'
+
 -- [[ Basic Keymaps ]]
 --  See `:help vim.keymap.set()`
 
@@ -165,6 +175,13 @@ vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 
 -- Diagnostic keymaps
 vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
+
+-- Show ALL available keymaps for this buffer (which-key full listing).
+--  Pressing <leader> already pops the top-level groups; this dumps the
+--  complete per-buffer keymap set (incl. filetype-specific maps, e.g. LaTeX).
+vim.keymap.set('n', '<leader>?', function()
+  require('which-key').show { global = false }
+end, { desc = 'Show ALL keymaps (this buffer)' })
 
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
@@ -200,6 +217,16 @@ vim.api.nvim_create_autocmd('TextYankPost', {
   group = vim.api.nvim_create_augroup('kickstart-highlight-yank', { clear = true }),
   callback = function()
     vim.highlight.on_yank()
+  end,
+})
+
+-- Enable spell for prose filetypes (LaTeX, markdown, plain text, commits, ...).
+vim.api.nvim_create_autocmd('FileType', {
+  desc = 'Enable spellcheck for prose filetypes',
+  group = vim.api.nvim_create_augroup('kickstart-spell', { clear = true }),
+  pattern = { 'tex', 'plaintex', 'latex', 'markdown', 'pandoc', 'text', 'gitcommit', 'typst' },
+  callback = function()
+    vim.opt_local.spell = true
   end,
 })
 
@@ -322,6 +349,14 @@ require('lazy').setup({
         { '<leader>w', group = '[W]orkspace' },
         { '<leader>t', group = '[T]oggle' },
         { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } },
+        -- [L]aTeX group: vimtex's <localleader>l* actions land here because
+        -- maplocalleader == mapleader == <Space>. Labels below document them.
+        { '<leader>l', group = '[L]aTeX' },
+        { '<leader>ll', desc = '[L]aTeX [C]ompile' },
+        { '<leader>lv', desc = '[L]aTeX [V]iew PDF' },
+        { '<leader>lc', desc = '[L]aTeX [C]lean aux files' },
+        { '<leader>lt', desc = '[L]aTeX [T]able of contents' },
+        { '<leader>le', desc = '[L]aTeX [E]rrors' },
       },
     },
   },
@@ -665,6 +700,41 @@ require('lazy').setup({
             },
           },
         },
+        -- LaTeX language server: completion (commands/citations/refs),
+        -- go-to-def, hover, build (latexmk) + SyncTeX forward search (zathura).
+        texlab = {
+          settings = {
+            texlab = {
+              build = {
+                executable = 'latexmk',
+                args = { '-pdf', '-interaction=nonstopmode', '-synctex=1', '%f' },
+                onSave = true,
+                forwardSearchAfter = true,
+              },
+              forwardSearch = {
+                executable = 'zathura',
+                args = { '--synctex-forward', '%l:1:%f', '%p' },
+              },
+              chktex = { onOpenAndSave = true },
+              inlayHints = { labelReferences = true, labelDefinitions = true },
+            },
+          },
+        },
+        -- Grammar/style checking for LaTeX, markdown & plain text (EN + DE).
+        -- Uses the `ltex-ls-plus` package (NOT plain `ltex-ls`): plus bundles
+        -- JDK 21 + LanguageTool >=6.6, which fixes the Java 24+ crash where the
+        -- default jdk.xml.totalEntitySizeLimit dropped to 100000 (JDK-8343022)
+        -- and plain ltex-ls's old LanguageTool fails to parse en/grammar.xml.
+        -- See https://github.com/valentjn/ltex-ls/issues/322
+        ltex = {
+          cmd = { 'ltex-ls-plus' },
+          settings = {
+            ltex = {
+              language = { 'en-US', 'de-DE' },
+              checkFrequency = 'save',
+            },
+          },
+        },
       }
 
       -- Ensure the servers and tools above are installed
@@ -681,8 +751,15 @@ require('lazy').setup({
       -- You can add other tools here that you want Mason to install
       -- for you, so that they are available from within Neovim.
       local ensure_installed = vim.tbl_keys(servers or {})
+      -- `ltex` server uses the ltex-ls-plus package (see the ltex entry above);
+      -- plain ltex-ls crashes on Java 24+. Install the plus package directly
+      -- and drop the `ltex` key (which mason-lspconfig would map to ltex-ls).
+      ensure_installed = vim.tbl_filter(function(k)
+        return k ~= 'ltex'
+      end, ensure_installed)
       vim.list_extend(ensure_installed, {
         'stylua', -- Used to format Lua code
+        'ltex-ls-plus',
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
@@ -766,15 +843,15 @@ require('lazy').setup({
           return 'make install_jsregexp'
         end)(),
         dependencies = {
-          -- `friendly-snippets` contains a variety of premade snippets.
-          --    See the README about individual language/framework/plugin snippets:
-          --    https://github.com/rafamadriz/friendly-snippets
-          -- {
-          --   'rafamadriz/friendly-snippets',
-          --   config = function()
-          --     require('luasnip.loaders.from_vscode').lazy_load()
-          --   end,
-          -- },
+          -- `friendly-snippets` contains a variety of premade snippets,
+          -- including LaTeX and markdown. See the README for details:
+          -- https://github.com/rafamadriz/friendly-snippets
+          {
+            'rafamadriz/friendly-snippets',
+            config = function()
+              require('luasnip.loaders.from_vscode').lazy_load()
+            end,
+          },
         },
       },
       'saadparwaiz1/cmp_luasnip',
@@ -784,6 +861,10 @@ require('lazy').setup({
       --  into multiple repos for maintenance purposes.
       'hrsh7th/cmp-nvim-lsp',
       'hrsh7th/cmp-path',
+      -- English/prose word completion from open buffers (terminology reuse).
+      'hrsh7th/cmp-buffer',
+      -- LaTeX symbol completion: type `\alpha` and pick the Unicode glyph α.
+      'kdheepak/cmp-latex-symbols',
     },
     config = function()
       -- See `:help cmp`
@@ -860,6 +941,8 @@ require('lazy').setup({
           { name = 'nvim_lsp' },
           { name = 'luasnip' },
           { name = 'path' },
+          { name = 'buffer' }, -- English/prose word completion from buffers
+          { name = 'latex_symbols' }, -- LaTeX symbols (\alpha -> alpha glyph)
         },
       }
     end,
@@ -932,8 +1015,15 @@ require('lazy').setup({
       -- Treesitter highlighting/indent/folding are provided by Neovim itself
       -- (see :h treesitter-highlight). Start the parser on each FileType; when a
       -- parser exists, also enable treesitter-based indentexpr and folding.
+      -- LaTeX is skipped: vimtex owns syntax/conceal/math-zone text objects
+      -- (:h vimtex-faq-treesitter). The `latex` parser is intentionally NOT
+      -- installed; `bibtex` is installed for .bib files.
+      local ts_skip = { tex = true, plaintex = true, latex = true }
       vim.api.nvim_create_autocmd('FileType', {
         callback = function(event)
+          if ts_skip[vim.bo[event.buf].filetype] then
+            return
+          end
           if pcall(vim.treesitter.start, event.buf) then
             vim.bo[event.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
             -- Folding is window-local: only set it for the window actually showing
@@ -954,6 +1044,7 @@ require('lazy').setup({
       require('nvim-treesitter').install {
         'python', 'bash', 'c', 'diff', 'html', 'lua', 'luadoc',
         'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc',
+        'bibtex', -- .bib files (LaTeX bibliography)
       }
     end,
   },
