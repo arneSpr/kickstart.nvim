@@ -156,6 +156,11 @@ vim.opt.cursorline = true
 -- Minimal number of screen lines to keep above and below the cursor.
 vim.opt.scrolloff = 10
 
+-- Start with all folds open. Treesitter (`foldexpr`) still creates folds per
+-- function/class, but foldlevel=99 means files open expanded instead of every
+-- function collapsed. Use `zM` to collapse all, `zR` to expand all.
+vim.opt.foldlevel = 99
+
 -- [[ Spellcheck (scientific/prose writing) ]]
 --  Off globally; enabled per-filetype in the `spell` augroup below.
 --  EN + DE both active (DE spell file is downloaded on first use).
