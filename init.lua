@@ -176,12 +176,14 @@ vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 -- Diagnostic keymaps
 vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
 
--- Show ALL available keymaps for this buffer (which-key full listing).
---  Pressing <leader> already pops the top-level groups; this dumps the
---  complete per-buffer keymap set (incl. filetype-specific maps, e.g. LaTeX).
+-- Show ALL available keymaps (which-key full listing, global + buffer-local).
+--  Pressing <leader> already pops the top-level groups; this opens the full
+--  tree of every normal-mode mapping — global plugin/builtin maps AND
+--  filetype-specific buffer maps (e.g. the [L]aTeX group in .tex files).
+--  For a flat, searchable list across ALL modes use <leader>sk (Telescope).
 vim.keymap.set('n', '<leader>?', function()
-  require('which-key').show { global = false }
-end, { desc = 'Show ALL keymaps (this buffer)' })
+  require('which-key').show {}
+end, { desc = 'Show ALL keymaps (global + buffer)' })
 
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
